@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.data/
+.env*
+!.env.example
+*.tsbuildinfo
+test-results/
+playwright-report/
+.pnpm-store/
+.release
+.release.*
+.deploy.lock
+*.incoming
+backups/

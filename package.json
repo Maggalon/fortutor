@@ -1,0 +1,39 @@
+{
+  "name": "for-tutor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.4.2",
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "worker": "node --env-file-if-exists=.env.local --import tsx scripts/worker.ts",
+    "db:migrate": "node --env-file-if-exists=.env.local --import tsx scripts/migrate.ts",
+    "bots:setup": "node --env-file-if-exists=.env.local --import tsx scripts/setup-bots.ts",
+    "format": "prettier --write app components lib scripts tests docs"
+  },
+  "dependencies": {
+    "next": "^16.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "pg": "^8.16.0",
+    "zod": "^4.0.0",
+    "bullmq": "^5.0.0",
+    "ioredis": "^5.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "@phosphor-icons/react": "^2.1.10"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "tsx": "^4.20.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "prettier": "^3.9.0"
+  }
+}

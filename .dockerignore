@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.data
+.env*
+*.tsbuildinfo
+test-results
+playwright-report
+docs/screenshots
+backups
+.release
+.release.*
+.deploy.lock
+*.incoming
+.pnpm-store
