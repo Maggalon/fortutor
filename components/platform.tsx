@@ -39,6 +39,7 @@ import {
 import Auth, { request } from "./auth";
 import SubscriptionPanel from "./subscription";
 import LegalLinks from "./legal-links";
+import { timezoneOptions } from "@/lib/timezones";
 import {
   Avatar,
   Badge,
@@ -1756,14 +1757,21 @@ function Settings({
                 </label>
                 <label className="field">
                   <span>Часовой пояс уведомлений</span>
-                  <input
+                  <select
                     name="timezone"
                     required
                     defaultValue={s.user.timezone}
-                  />
+                  >
+                    {timezoneOptions(s.user.timezone).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                   <small>
-                    Например, Europe/Moscow. Еженедельные повторы сохраняют
-                    местное время в этом поясе.
+                    Выберите смещение относительно UTC, например UTC+3 для
+                    Москвы. Уведомления и еженедельные повторы используют этот
+                    пояс. Время в календаре отображается в поясе браузера.
                   </small>
                 </label>
                 <label className="field">
