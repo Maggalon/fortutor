@@ -14,6 +14,12 @@ export interface Account {
   paymentDetails: string;
   timezone: string;
   reportDays: number;
+  legalAcceptance?: {
+    termsVersion: string;
+    termsAt: string;
+    personalDataVersion: string;
+    personalDataAt: string;
+  };
 }
 export interface Student {
   id: string;

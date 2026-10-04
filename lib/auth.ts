@@ -12,6 +12,7 @@ import {
 import { now } from "./domain";
 import { transaction, demoMode, pool } from "./db";
 import { ensureSubscription } from "./subscription";
+import { LEGAL_VERSION } from "./legal";
 export function currentUser(d: Database, raw: string | undefined) {
   assert(raw, "Войдите в аккаунт", 401);
   const s = d.sessions.find(
@@ -60,6 +61,8 @@ const credentials = z.object({
   password: z.string().min(12).max(200),
   name: z.string().trim().min(2).max(100).optional(),
   invite: z.string().max(200).optional(),
+  termsAccepted: z.boolean().optional(),
+  personalDataConsent: z.boolean().optional(),
 });
 export function authenticate(
   d: Database,
@@ -77,6 +80,14 @@ export function authenticate(
     );
   } else {
     assert(a.name, "Укажите имя");
+    assert(
+      a.termsAccepted === true,
+      "Примите пользовательское соглашение и оферту",
+    );
+    assert(
+      a.personalDataConsent === true,
+      "Необходимо отдельное согласие на обработку персональных данных",
+    );
     assert(
       !d.accounts.some((x) => x.email.toLowerCase() === a.email),
       "Этот email уже зарегистрирован",
@@ -117,6 +128,12 @@ export function authenticate(
       paymentDetails: "",
       timezone: "Europe/Moscow",
       reportDays: 14,
+      legalAcceptance: {
+        termsVersion: LEGAL_VERSION,
+        termsAt: now(),
+        personalDataVersion: LEGAL_VERSION,
+        personalDataAt: now(),
+      },
     };
     d.accounts.push(u);
     if (u.role === "teacher") ensureSubscription(d, u.id);

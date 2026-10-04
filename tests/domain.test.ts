@@ -191,6 +191,8 @@ test("one-time invitations, hashed sessions and credential checks", () => {
       password: "SafePassword123!",
       name: "Новый ученик",
       invite: raw,
+      termsAccepted: true,
+      personalDataConsent: true,
     },
     "join",
   );
@@ -204,6 +206,8 @@ test("one-time invitations, hashed sessions and credential checks", () => {
         password: "SafePassword123!",
         name: "Второй ученик",
         invite: raw,
+        termsAccepted: true,
+        personalDataConsent: true,
       },
       "join",
     ),

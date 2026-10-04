@@ -38,6 +38,7 @@ import {
 } from "@/lib/shared";
 import Auth, { request } from "./auth";
 import SubscriptionPanel from "./subscription";
+import LegalLinks from "./legal-links";
 import {
   Avatar,
   Badge,
@@ -413,6 +414,7 @@ export default function Platform({ demo }: { demo: boolean }) {
         </main>
         <footer className="app-footer">
           <span>For Tutor</span>
+          <LegalLinks compact />
           <span>
             Часовой пояс отображения:{" "}
             {Intl.DateTimeFormat().resolvedOptions().timeZone}

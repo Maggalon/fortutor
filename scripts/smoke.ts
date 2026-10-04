@@ -43,7 +43,13 @@ try {
   strict.equal((await health.json()).demo, false);
   const registered = await post(
     "auth/register",
-    { name: "HTTP тест преподавателя", email, password },
+    {
+      name: "HTTP тест преподавателя",
+      email,
+      password,
+      termsAccepted: true,
+      personalDataConsent: true,
+    },
     "",
   );
   teacherCookie = registered.response.headers.get("set-cookie")!.split(";")[0];
@@ -91,6 +97,8 @@ try {
       email: `student-${email}`,
       password,
       invite: new URL(invite).searchParams.get("invite"),
+      termsAccepted: true,
+      personalDataConsent: true,
     },
     "",
   );

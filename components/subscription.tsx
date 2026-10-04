@@ -172,7 +172,11 @@ export default function SubscriptionPanel({
           />
           <span>
             Согласен на сохранение способа оплаты и автоматическое списание 1190
-            ₽ каждый месяц. Автопродление можно отключить здесь в любое время.
+            ₽ каждый месяц по{" "}
+            <a href="/payment" target="_blank" rel="noopener noreferrer">
+              условиям оплаты
+            </a>
+            . Автопродление можно отключить здесь в любое время.
           </span>
         </label>
         <div className="subscription-actions">
@@ -204,9 +208,17 @@ export default function SubscriptionPanel({
           </a>
         </div>
         <p className="subscription-caption">
-          Карту обрабатывает ЮKassa. Возвращение с формы оплаты не подтверждает
-          платеж. Уже отправленное в банк списание может завершиться после
-          отключения автопродления.
+          Оплата означает принятие{" "}
+          <a href="/offer" target="_blank" rel="noopener noreferrer">
+            оферты
+          </a>
+          .{" "}
+          <a href="/payment" target="_blank" rel="noopener noreferrer">
+            Отмена и возврат
+          </a>
+          . Карту обрабатывает ЮKassa. Возвращение с формы оплаты не
+          подтверждает платеж. Уже отправленное в банк списание может
+          завершиться после отключения автопродления.
         </p>
         {error && (
           <p className="form-error" role="alert">

@@ -9,6 +9,7 @@ import {
   GraduationCap,
 } from "@phosphor-icons/react";
 import { Field } from "./ui";
+import LegalLinks from "./legal-links";
 export async function request(url: string, body?: unknown) {
   const response = await fetch(url, {
     method: body === undefined ? "GET" : "POST",
@@ -118,6 +119,8 @@ export default function Auth({
                   password: fd.get("password"),
                   name: fd.get("name") || undefined,
                   invite: invite || undefined,
+                  termsAccepted: fd.get("termsAccepted") === "on",
+                  personalDataConsent: fd.get("personalDataConsent") === "on",
                 },
                 mode,
               );
@@ -158,6 +161,46 @@ export default function Auth({
               <p role="alert" className="form-error">
                 {error}
               </p>
+            )}
+            {mode !== "login" && (
+              <div className="registration-consents">
+                <label>
+                  <input name="termsAccepted" type="checkbox" required />
+                  <span>
+                    Принимаю{" "}
+                    <a href="/terms" target="_blank" rel="noopener noreferrer">
+                      пользовательское соглашение
+                    </a>{" "}
+                    и{" "}
+                    <a href="/offer" target="_blank" rel="noopener noreferrer">
+                      оферту
+                    </a>
+                    .
+                  </span>
+                </label>
+                <label>
+                  <input name="personalDataConsent" type="checkbox" required />
+                  <span>
+                    Даю отдельное{" "}
+                    <a
+                      href="/consent"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      согласие на обработку персональных данных
+                    </a>
+                    . С{" "}
+                    <a
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      политикой
+                    </a>{" "}
+                    ознакомлен(а).
+                  </span>
+                </label>
+              </div>
             )}
             <button className="primary full" disabled={busy}>
               {busy
@@ -201,6 +244,7 @@ export default function Auth({
               </div>
             </div>
           )}
+          <LegalLinks compact />
         </div>
         <span className="auth-foot">
           Учиться и преподавать становится проще.

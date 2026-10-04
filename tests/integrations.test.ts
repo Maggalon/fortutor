@@ -212,6 +212,8 @@ test(
             name: "Тестовый ученик",
             password: "IntegrationPassword!",
             invite: new URL(invite.url).searchParams.get("invite"),
+            termsAccepted: true,
+            personalDataConsent: true,
           },
           "join",
         );
