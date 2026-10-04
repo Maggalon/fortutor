@@ -17,6 +17,7 @@
 | `S3_FORCE_PATH_STYLE`                         | `true` для провайдеров, требующих path-style (например MinIO); иначе `false`                                                           |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` | Токен и username без `@`                                                                                                               |
 | `TELEGRAM_WEBHOOK_SECRET`                     | Независимый случайный секрет webhook                                                                                                   |
+| `TELEGRAM_PROXY_URL`                          | Необязательный HTTP/HTTPS-прокси только для Telegram: `http://USER:PASSWORD@HOST:PORT`; логин и пароль URL-кодируются                  |
 | `MAX_BOT_TOKEN`, `MAX_BOT_URL`                | Токен официального API и публичная ссылка бота                                                                                         |
 | `MAX_WEBHOOK_SECRET`                          | Другой случайный секрет webhook                                                                                                        |
 | `MAX_API_URL`                                 | По умолчанию `https://platform-api2.max.ru`                                                                                            |
@@ -35,6 +36,28 @@
 5. `/homework` или кнопка «Сдать ДЗ» запускает выбор предмета, задания, загрузку файла/фото, затем «Подтвердить отправку». До подтверждения работа не считается сданной. `/unlink` отключает привязки этого пользователя в данном канале.
 
 Проверка webhook через API `getWebhookInfo`: смотрите pending_update_count и last_error_message. Для просмотра не вставляйте токен в публичные сообщения или логи CI. [Официальная документация Telegram](https://core.telegram.org/bots/api#setwebhook).
+
+### HTTP-прокси для Telegram
+
+Если сервер не соединяется с `api.telegram.org:443` и получает `ETIMEDOUT`, задайте `TELEGRAM_PROXY_URL` в серверном `.env.production`. Формат, выдаваемый прокси-провайдером `HOST:PORT:USER:PASSWORD`, преобразуется в `http://USER:PASSWORD@HOST:PORT`. Зарезервированные символы в логине/пароле нужно URL-кодировать. Для подключения используется HTTP CONNECT с Basic-аутентификацией; TLS-сертификат Telegram проверяется как обычно.
+
+```dotenv
+TELEGRAM_PROXY_URL=http://USER:PASSWORD@HOST:PORT
+```
+
+Прокси используется для Telegram Bot API, регистрации webhook, отправки сообщений и скачивания Telegram-вложений. MAX, ЮKassa, DeepSeek и S3 сохраняют свой транспорт. Входящие webhooks Telegram по-прежнему приходят напрямую на публичный HTTPS-домен через Nginx Proxy Manager. Без `TELEGRAM_PROXY_URL` запросы к Telegram идут напрямую.
+
+После первого deployment версии с поддержкой прокси добавьте строку в `.env.production`. Из каталога проекта на VPS выполните:
+
+```sh
+set -a
+source .release
+set +a
+docker compose --env-file .env.production -f deploy/compose.production.yml up -d --no-deps --no-build --force-recreate web worker
+docker compose --env-file .env.production -f deploy/compose.production.yml run --rm --no-deps worker node --import tsx scripts/setup-bots.ts
+```
+
+При последующем изменении прокси пересборка не нужна, достаточно пересоздать контейнеры. Учетные данные храните только в env-файле; не переносите их в Git, Dockerfile или workflow. Ошибки транспорта Telegram не выводят адрес прокси, его пароль или токен бота. [Undici ProxyAgent](https://github.com/nodejs/undici/blob/main/docs/docs/api/ProxyAgent.md).
 
 ## MAX
 

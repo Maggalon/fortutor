@@ -16,24 +16,25 @@
     "format": "prettier --write app components lib scripts tests docs"
   },
   "dependencies": {
-    "next": "^16.2.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "pg": "^8.16.0",
-    "zod": "^4.0.0",
-    "bullmq": "^5.0.0",
-    "ioredis": "^5.0.0",
     "@aws-sdk/client-s3": "^3.0.0",
     "@aws-sdk/s3-request-presigner": "^3.0.0",
-    "@phosphor-icons/react": "^2.1.10"
+    "@phosphor-icons/react": "^2.1.10",
+    "bullmq": "^5.0.0",
+    "ioredis": "^5.0.0",
+    "next": "^16.2.0",
+    "pg": "^8.16.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "undici": "^7.30.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.0",
-    "tsx": "^4.20.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "prettier": "^3.9.0"
+    "prettier": "^3.9.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
   }
 }

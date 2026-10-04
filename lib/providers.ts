@@ -1,8 +1,9 @@
 import type { Channel, Job } from "./types";
 import { assert } from "./security";
+import { telegramFetch } from "./telegram-transport";
 export async function telegram(method: string, body: unknown) {
   assert(process.env.TELEGRAM_BOT_TOKEN, "Telegram не подключен", 503);
-  const response = await fetch(
+  const response = await telegramFetch(
     `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`,
     {
       method: "POST",
@@ -102,7 +103,9 @@ export async function readMedia(url: string) {
       ),
     "Недопустимый адрес медиа",
   );
-  const response = await fetch(url, {
+  const response = await (
+    u.hostname === "api.telegram.org" ? telegramFetch : fetch
+  )(url, {
     redirect: "error",
     signal: AbortSignal.timeout(25000),
   });
