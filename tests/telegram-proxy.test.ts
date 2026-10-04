@@ -2,6 +2,7 @@ import test from "node:test";
 import strict from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { ProxyAgent } from "undici";
 import { telegramFetch } from "../lib/telegram-transport";
 import { telegram, maxRequest, readMedia } from "../lib/providers";
 
@@ -59,7 +60,9 @@ test("proxy applies to Telegram methods and files while MAX remains direct", asy
   globalThis.fetch = async (input, init) => {
     calls.push({
       url: String(input),
-      proxy: !!(init as RequestInit & { dispatcher?: unknown })?.dispatcher,
+      proxy:
+        (init as RequestInit & { dispatcher?: unknown })?.dispatcher instanceof
+        ProxyAgent,
     });
     if (String(input).includes("/file/") || String(input).includes("okcdn.ru"))
       return new Response("%PDF-1.7");

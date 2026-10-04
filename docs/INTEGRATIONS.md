@@ -68,6 +68,14 @@ docker compose --env-file .env.production -f deploy/compose.production.yml run -
 
 API получает токен в заголовке `Authorization`. Webhook проверяет `X-Max-Bot-Api-Secret`. Endpoint должен отвечать на HTTPS/443 с действующим сертификатом; событие сначала сохраняется в PostgreSQL, тяжелая обработка выполняется worker. [Подписки MAX](https://dev.max.ru/docs-api/methods/POST/subscriptions), [отправка сообщений](https://dev.max.ru/docs-api/methods/POST/messages), [медиа](https://dev.max.ru/docs-api/use-cases/sending-messages/media).
 
+### Сертификаты MAX API
+
+MAX требует доверия к сертификатам Минцифры. В репозиторий включен `certs/max-ca.pem`: корневой и промежуточный сертификаты с официального сервиса Госуслуг. Dockerfile копирует bundle в оба готовых образа. `lib/max-transport.ts` добавляет эту цепочку к обычным CA только для запросов MAX API и его вложений; проверка имени сервера, сроков и подписи TLS остается включенной. Дополнительные env-параметры для этого не нужны.
+
+Ошибка `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` после `Telegram webhook configured` относится к следующему запросу — настройке MAX. Выполните deployment версии с CA-bundle, загрузите текущие теги из `.release` и повторите `scripts/setup-bots.ts`. Установка сертификата только в ОС VPS не обновляет хранилище Node.js внутри уже работающего контейнера.
+
+Публичные источники, отпечатки, сроки и команда обновления приведены в [certs/README.md](../certs/README.md). Перед окончанием срока промежуточного CA обновите bundle командой `node scripts/update-max-ca.mjs`, проверьте изменения и выполните deployment обоих образов. Bundle поставляется вместе с кодом, загрузка сертификатов во время запуска контейнера не требуется.
+
 Если бот не отвечает: проверьте token, актуальный домен API, подписку, работоспособность worker, секреты и формат публичной ссылки. После долгой недоступности endpoint MAX может отключить подписку; повторите `bots:setup`. Если MAX меняет media CDN, добавляйте новый домен в `readMedia()` только после сверки с официальной документацией.
 
 ## DeepSeek

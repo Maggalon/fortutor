@@ -1,6 +1,7 @@
 import type { Channel, Job } from "./types";
 import { assert } from "./security";
 import { telegramFetch } from "./telegram-transport";
+import { maxFetch } from "./max-transport";
 export async function telegram(method: string, body: unknown) {
   assert(process.env.TELEGRAM_BOT_TOKEN, "Telegram не подключен", 503);
   const response = await telegramFetch(
@@ -25,7 +26,7 @@ export async function maxRequest(
   body?: unknown,
 ) {
   assert(process.env.MAX_BOT_TOKEN, "MAX не подключен", 503);
-  const response = await fetch(
+  const response = await maxFetch(
     `${process.env.MAX_API_URL || "https://platform-api2.max.ru"}${route}`,
     {
       method,
@@ -104,7 +105,7 @@ export async function readMedia(url: string) {
     "Недопустимый адрес медиа",
   );
   const response = await (
-    u.hostname === "api.telegram.org" ? telegramFetch : fetch
+    u.hostname === "api.telegram.org" ? telegramFetch : maxFetch
   )(url, {
     redirect: "error",
     signal: AbortSignal.timeout(25000),
