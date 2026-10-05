@@ -87,13 +87,17 @@ export async function processOutbox(batchSize = 10, pauseMs = 1100) {
           );
       }
       await transaction((d) => {
-        const j = d.jobs.find((x) => x.id === job.id)!;
+        const j = d.jobs.find((x) => x.id === job.id);
+        if (!j || j.status !== "processing" || j.leaseAt !== job.leaseAt)
+          return;
         j.status = "done";
         j.error = undefined;
       }, job.tutorId);
     } catch (e) {
       await transaction((d) => {
-        const j = d.jobs.find((x) => x.id === job.id)!;
+        const j = d.jobs.find((x) => x.id === job.id);
+        if (!j || j.status !== "processing" || j.leaseAt !== job.leaseAt)
+          return;
         j.error = (e instanceof Error ? e.message : "Ошибка доставки")
           .replace(/bot\d+:[\w-]+/g, "bot[redacted]")
           .slice(0, 250);

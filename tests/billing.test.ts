@@ -1,6 +1,7 @@
 import test from "node:test";
 import strict from "node:assert/strict";
-import { seed, empty } from "../lib/seed";
+import { seed } from "../lib/seed";
+import { isolateTestDatabase } from "./database";
 import {
   assertSubscription,
   ensureSubscription,
@@ -18,7 +19,7 @@ import {
   paymentHistory,
 } from "../lib/billing";
 import { act, snapshot, submit, schedule } from "../lib/domain";
-import { transaction, migrate, pool } from "../lib/db";
+import { transaction, migrate } from "../lib/db";
 import { id } from "../lib/security";
 
 process.env.YOOKASSA_SHOP_ID = "test-shop";
@@ -215,9 +216,8 @@ test("canceled renewal schedules retry without granting a paid period", () => {
 test(
   "PostgreSQL billing: concurrent checkout, verified webhook, renewal, uncertainty cutoff, ownership and tenant rollback",
   { skip: !process.env.TEST_DATABASE_URL },
-  async () => {
-    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-    process.env.DEMO_MODE = "false";
+  async (t) => {
+    await isolateTestDatabase(t);
     await migrate();
     const uid = `billing-${id()}`,
       second = `billing-${id()}`;
@@ -343,15 +343,6 @@ test(
       );
     } finally {
       globalThis.fetch = originalFetch;
-      for (const collection of Object.keys(empty()))
-        await pool().query(
-          `DELETE FROM ft_${collection} WHERE tutor_id=ANY($1::text[])`,
-          [[uid, second]],
-        );
-      await pool().query("DELETE FROM ft_tenants WHERE id=ANY($1::text[])", [
-        [uid, second],
-      ]);
-      await pool().end();
     }
   },
 );

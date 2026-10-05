@@ -9,7 +9,8 @@ import {
   runTelegramPolling,
 } from "../lib/telegram-polling";
 import { enqueueBotEvent, botEventId } from "../lib/bot-events";
-import { transaction, migrate, pool } from "../lib/db";
+import { transaction, migrate } from "../lib/db";
+import { isolateTestDatabase } from "./database";
 import { seed, empty } from "../lib/seed";
 import { id } from "../lib/security";
 import { act } from "../lib/domain";
@@ -101,12 +102,11 @@ test("Both delivery modes share deduplication and private-chat boundaries", () =
 test(
   "PostgreSQL polling persists updates before acknowledging, resumes safely, locks across workers and binds through the outbox",
   { skip: !process.env.TEST_DATABASE_URL },
-  async () => {
+  async (t) => {
     const env = { ...process.env },
       original = globalThis.fetch;
     const uid = `polling-test-${id()}`;
-    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-    process.env.DEMO_MODE = "false";
+    await isolateTestDatabase(t);
     process.env.TELEGRAM_UPDATE_MODE = "polling";
     process.env.TELEGRAM_BOT_TOKEN = uid;
     process.env.TELEGRAM_BOT_USERNAME = "test_bot";
@@ -288,28 +288,6 @@ test(
       strict.equal(offsets.length, before);
     } finally {
       releaseFetch?.();
-      await transaction((d) => {
-        const jobIds = d.jobs
-          .filter((j) => (j.event as any)?.marker === uid)
-          .map((j) => j.id);
-        for (const key of Object.keys(empty()) as (keyof typeof d)[]) {
-          const rows = d[key] as { tutorId: string; id: string }[];
-          rows.splice(
-            0,
-            rows.length,
-            ...rows.filter(
-              (row) =>
-                row.tutorId !== uid &&
-                row.id !== cursorId &&
-                !jobIds.some(
-                  (j) => row.id === j || row.id.startsWith(`reply-${j}-`),
-                ),
-            ),
-          );
-        }
-      });
-      await pool().query("DELETE FROM ft_tenants WHERE id=$1", [uid]);
-      await pool().end();
       process.env = env;
       globalThis.fetch = original;
     }

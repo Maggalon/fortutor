@@ -6,8 +6,8 @@ import {
   HeadObjectCommand,
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
-import { transaction, migrate, pool } from "../lib/db";
-import { empty } from "../lib/seed";
+import { transaction, migrate } from "../lib/db";
+import { isolateTestDatabase } from "./database";
 import { act, enqueue, now } from "../lib/domain";
 import { authenticate, currentUser } from "../lib/auth";
 import { id, hashPassword } from "../lib/security";
@@ -21,8 +21,7 @@ test(
   "Integrated bot, files, AI and durable queue scenarios",
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
-    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-    process.env.DEMO_MODE = "false";
+    await isolateTestDatabase(t);
     process.env.TELEGRAM_BOT_TOKEN = "test-not-a-real-token";
     process.env.TELEGRAM_BOT_USERNAME = "fortutor_test_bot";
     process.env.MAX_BOT_TOKEN = "test-not-a-real-token";
@@ -48,6 +47,7 @@ test(
     const fetchOriginal = globalThis.fetch;
     const s3Original = S3Client.prototype.send;
     const sent: { url: string; body: Record<string, any> }[] = [];
+    let duringDelivery: (() => Promise<void>) | undefined;
     let aiCalls = 0,
       failDelivery = false;
     const pdf = Buffer.from("%PDF-1.7\nTest-only attachment");
@@ -93,6 +93,7 @@ test(
         });
       }
       sent.push({ url, body });
+      if (url.endsWith("/sendMessage")) await duringDelivery?.();
       if (
         failDelivery &&
         (url.endsWith("/sendMessage") || url.includes("/messages?"))
@@ -104,7 +105,6 @@ test(
       return Response.json({ ok: true, result: true, success: true });
     };
     let student: Account, sid: string, aid: string;
-    const botIds: string[] = [];
     async function event(
       channel: Channel,
       text = "",
@@ -180,7 +180,6 @@ test(
                 },
               },
       };
-      botIds.push(j.id);
       await processBot(j);
       return j;
     }
@@ -369,6 +368,59 @@ test(
         },
       );
       await t.test(
+        "Outbox tolerates deleted jobs and preserves a newer lease after delivery succeeds or fails",
+        async () => {
+          try {
+            for (const deleted of [true, false]) {
+              for (const deliveryFails of [false, true]) {
+                const jid = `${uid}-race-${deleted}-${deliveryFails}`;
+                const newerLease = new Date(Date.now() + 1000).toISOString();
+                await transaction((d) =>
+                  enqueue(d, {
+                    id: jid,
+                    tutorId: uid,
+                    kind: "message",
+                    channel: "telegram",
+                    chatId: "202",
+                    text: "Доставка одновременно с изменением задания",
+                  }),
+                );
+                duringDelivery = async () => {
+                  await transaction((d) => {
+                    const j = d.jobs.find((j) => j.id === jid)!;
+                    strict.equal(j.status, "processing");
+                    if (deleted) d.jobs = d.jobs.filter((j) => j.id !== jid);
+                    else {
+                      j.leaseAt = newerLease;
+                      j.attempts++;
+                    }
+                  }, uid);
+                };
+                failDelivery = deliveryFails;
+                await processOutbox(1, 0);
+                const stored = await transaction(
+                  (d) => d.jobs.find((j) => j.id === jid),
+                  uid,
+                );
+                if (deleted) strict.equal(stored, undefined);
+                else {
+                  strict.equal(stored?.status, "processing");
+                  strict.equal(stored?.leaseAt, newerLease);
+                  strict.equal(stored?.attempts, 2);
+                  strict.equal(stored?.error, undefined);
+                  await transaction((d) => {
+                    d.jobs = d.jobs.filter((j) => j.id !== jid);
+                  }, uid);
+                }
+              }
+            }
+          } finally {
+            duringDelivery = undefined;
+            failDelivery = false;
+          }
+        },
+      );
+      await t.test(
         "Redis BullMQ runs the outbox; delivery failures retry durably and exhaust at five attempts",
         { skip: !process.env.TEST_REDIS_URL },
         async () => {
@@ -432,18 +484,6 @@ test(
     } finally {
       globalThis.fetch = fetchOriginal;
       S3Client.prototype.send = s3Original;
-      await transaction((d) => {
-        for (const key of Object.keys(empty()) as (keyof typeof d)[]) {
-          const rows = d[key] as { tutorId: string; id: string }[];
-          rows.splice(
-            0,
-            rows.length,
-            ...rows.filter((x) => x.tutorId !== uid && !botIds.includes(x.id)),
-          );
-        }
-      });
-      await pool().query("DELETE FROM ft_tenants WHERE id=$1", [uid]);
-      await pool().end();
     }
   },
 );
