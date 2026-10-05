@@ -1679,7 +1679,24 @@ function Settings({
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [botConnection, setBotConnection] = useState<{
+    channel: "telegram" | "max";
+    url: string;
+    appUrl?: string;
+    username?: string;
+    code: string;
+  } | null>(null);
   const teacher = s.user.role === "teacher";
+  useEffect(() => {
+    if (
+      botConnection &&
+      s.bindings.some(
+        (b) => b.channel === botConnection.channel && b.role === "student",
+      )
+    ) {
+      setBotConnection(null);
+    }
+  }, [s.bindings, botConnection]);
   async function save(body: unknown) {
     setBusy(true);
     setError("");
@@ -1696,7 +1713,13 @@ function Settings({
     setError("");
     try {
       const r = await mutate({ action: "bot.link", channel });
-      window.location.assign(r.url);
+      setBotConnection({
+        channel,
+        url: r.url,
+        appUrl: r.appUrl,
+        username: r.username,
+        code: r.code,
+      });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1806,6 +1829,60 @@ function Settings({
               <p className="muted">
                 Получайте напоминания и сдавайте работы прямо в боте.
               </p>
+              {botConnection && (
+                <Modal
+                  title={`Подключение ${botConnection.channel === "telegram" ? "Telegram" : "MAX"}`}
+                  onClose={() => setBotConnection(null)}
+                >
+                  <div className="bot-connection">
+                    <p>
+                      Откройте бота и нажмите «Начать» / Start. После
+                      подтверждения привязки бот появится в настройках как
+                      подключенный.
+                    </p>
+                    <div className="bot-connection-actions">
+                      {botConnection.appUrl && (
+                        <a className="primary" href={botConnection.appUrl}>
+                          Открыть в приложении Telegram{" "}
+                          <ArrowUpRight size={16} />
+                        </a>
+                      )}
+                      <a
+                        href={botConnection.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {botConnection.channel === "telegram"
+                          ? "Открыть через t.me"
+                          : "Открыть MAX"}{" "}
+                        <ArrowUpRight size={16} />
+                      </a>
+                    </div>
+                    <p>
+                      Если ссылка не открывается
+                      {botConnection.username
+                        ? `, найдите ${botConnection.username} в Telegram`
+                        : ", откройте чат с ботом MAX"}{" "}
+                      и отправьте эту команду:
+                    </p>
+                    <label>
+                      <span className="muted">
+                        Команда подключения — нажмите, чтобы выделить
+                      </span>
+                      <input
+                        aria-label="Команда подключения"
+                        readOnly
+                        value={`/start ${botConnection.code}`}
+                        onFocus={(e) => e.currentTarget.select()}
+                      />
+                    </label>
+                    <small className="muted">
+                      Код действует 15 минут и используется один раз. Если срок
+                      истек, закройте окно и нажмите «Подключить» снова.
+                    </small>
+                  </div>
+                </Modal>
+              )}
               {(["telegram", "max"] as const).map((channel) => {
                 const binding = s.bindings.find(
                   (b) => b.channel === channel && b.role === "student",

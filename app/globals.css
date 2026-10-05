@@ -1584,6 +1584,34 @@ td button {
   color: var(--accent);
   flex-shrink: 0;
 }
+.bot-connection {
+  display: grid;
+  gap: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.bot-connection-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bot-connection-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.bot-connection label {
+  display: grid;
+  gap: 6px;
+}
+.bot-connection input {
+  width: 100%;
+  min-width: 0;
+  font-family: monospace;
+}
 .logout-button {
   color: var(--red);
   font-size: 12px;

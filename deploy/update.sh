@@ -18,6 +18,7 @@ docker network inspect "$proxy_network" >/dev/null
 if [[ -f .release ]]; then bash deploy/backup.sh; fi
 "${compose[@]}" run --rm migrate
 "${compose[@]}" up -d --no-build --wait --wait-timeout 180
+"${compose[@]}" run --rm --no-deps worker node --import tsx scripts/setup-bots.ts
 if [[ -f .release ]]; then cp .release .release.previous; fi
 printf 'WEB_IMAGE=%s\nWORKER_IMAGE=%s\n' "$WEB_IMAGE" "$WORKER_IMAGE" > .release.incoming
 mv .release.incoming .release

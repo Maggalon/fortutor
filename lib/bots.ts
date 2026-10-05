@@ -31,26 +31,28 @@ export function normalize(channel: Channel, event: unknown): BotEvent {
     return {
       chatId: str(chat.id),
       userId: str(from.id),
-      text: str(message.text || message.caption),
+      text: e.callback_query ? "" : str(message.text || message.caption),
       callback: str(cb.data),
       callbackId: str(cb.id),
-      media: doc.file_id
-        ? [
-            {
-              fileId: str(doc.file_id),
-              name: str(doc.file_name) || "работа.pdf",
-              mime: str(doc.mime_type),
-            },
-          ]
-        : photo.file_id
+      media: e.callback_query
+        ? []
+        : doc.file_id
           ? [
               {
-                fileId: str(photo.file_id),
-                name: "фото.jpg",
-                mime: "image/jpeg",
+                fileId: str(doc.file_id),
+                name: str(doc.file_name) || "работа.pdf",
+                mime: str(doc.mime_type),
               },
             ]
-          : [],
+          : photo.file_id
+            ? [
+                {
+                  fileId: str(photo.file_id),
+                  name: "фото.jpg",
+                  mime: "image/jpeg",
+                },
+              ]
+            : [],
     };
   }
   const cb = obj(e.callback),
@@ -60,14 +62,14 @@ export function normalize(channel: Channel, event: unknown): BotEvent {
     user = obj(cb.user || message.sender || e.user);
   const attachments = Array.isArray(body.attachments) ? body.attachments : [];
   return {
-    chatId: str(recipient.chat_id || e.chat_id),
+    chatId: str(recipient.chat_id ?? e.chat_id),
     userId: str(user.user_id),
     text:
-      str(body.text) ||
+      (e.callback ? "" : str(body.text)) ||
       (e.update_type === "bot_started" ? `/start ${str(e.payload)}` : ""),
     callback: str(cb.payload),
     callbackId: str(cb.callback_id),
-    media: attachments
+    media: (e.callback ? [] : attachments)
       .filter((a) => ["image", "file"].includes(str(obj(a).type)))
       .map((a) => {
         const item = obj(a),
@@ -85,6 +87,23 @@ export function normalize(channel: Channel, event: unknown): BotEvent {
       }),
   };
 }
+export function parseBotCommand(text: string) {
+  const match = text
+    .trim()
+    .match(/^\/([a-z\d_]+)(?:@[a-z\d_]+)?(?:\s+([\s\S]*))?$/i);
+  return match
+    ? { name: match[1].toLowerCase(), argument: (match[2] || "").trim() }
+    : null;
+}
+const studentButtons = [
+  { text: "Сдать ДЗ", data: "homework" },
+  { text: "Баланс занятий", data: "balance" },
+  { text: "Помощь", data: "help" },
+];
+const parentButtons = [
+  { text: "Баланс детей", data: "balance" },
+  { text: "Помощь", data: "help" },
+];
 function reply(
   d: Database,
   j: Job,
@@ -134,6 +153,8 @@ export async function processBot(j: Job) {
 async function processBotEvent(j: Job) {
   const e = normalize(j.channel!, j.event);
   if (!e.chatId || !e.userId) return;
+  const command = parseBotCommand(e.text);
+  const action = e.callback || command?.name || "";
   if (e.callbackId) {
     try {
       if (j.channel === "telegram")
@@ -172,6 +193,7 @@ async function processBotEvent(j: Job) {
   const uploaded: StoredFile[] = [];
   if (
     prep?.flow &&
+    !action &&
     e.media.length &&
     (await transaction(
       (d) => subscriptionView(d, prep.binding.tutorId).canWrite,
@@ -199,7 +221,12 @@ async function processBotEvent(j: Job) {
   try {
     await transaction((d) => {
       if (d.receipts.some((x) => x.id === j.id)) return;
-      const code = e.text.replace(/^\/start\s*/, "").trim();
+      const code =
+        command?.name === "start"
+          ? command.argument
+          : command
+            ? ""
+            : e.text.trim();
       if (code && !e.callback && !e.media.length) {
         const lt = d.linkTokens.find(
           (x) =>
@@ -223,15 +250,16 @@ async function processBotEvent(j: Job) {
             !conflict || role === "parent" || conflict.studentId === studentId,
             "Этот мессенджер уже привязан к другому ученику",
           );
-          if (
-            !d.bindings.some(
-              (b) =>
-                b.studentId === studentId &&
-                b.channel === j.channel &&
-                b.userId === e.userId &&
-                b.role === role,
-            )
-          )
+          const existing = d.bindings.find(
+            (b) =>
+              b.tutorId === tutorId &&
+              b.studentId === studentId &&
+              b.channel === j.channel &&
+              b.userId === e.userId &&
+              b.role === role,
+          );
+          if (existing) existing.chatId = e.chatId;
+          else
             d.bindings.push({
               id: id(),
               tutorId,
@@ -247,10 +275,36 @@ async function processBotEvent(j: Job) {
             d,
             j,
             e,
-            `Привязка подтверждена. ${role === "parent" ? "Вы будете получать уведомления об оплате и отчеты. Код действует один раз; для второго родителя запросите новый." : "Нажмите «Сдать ДЗ», чтобы отправить работу."}`,
-            role === "student" ? [{ text: "Сдать ДЗ", data: "homework" }] : [],
+            `Привязка подтверждена. ${role === "parent" ? "Вы будете получать уведомления об оплате и отчеты. Код действует один раз; для второго родителя запросите новый." : "Нажмите «Сдать ДЗ», чтобы отправить работу. /balance — баланс занятий, /help — помощь."}`,
+            role === "student" ? studentButtons : parentButtons,
           );
           if (s) s.parentCode = tokenCode();
+          d.receipts.push({
+            id: j.id,
+            tutorId: "system",
+            expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+          });
+          return;
+        }
+        if (
+          command?.name === "start" &&
+          !limit(d, `bot-code:${j.channel}:${e.userId}`, 10, 15)
+        ) {
+          reply(d, j, e, "Слишком много попыток. Подождите 15 минут.");
+          d.receipts.push({
+            id: j.id,
+            tutorId: "system",
+            expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+          });
+          return;
+        }
+        if (command?.name === "start") {
+          reply(
+            d,
+            j,
+            e,
+            "Ссылка подключения недействительна или уже использована. Получите новую в настройках кабинета ученика. Родителю нужен актуальный код от преподавателя.",
+          );
           d.receipts.push({
             id: j.id,
             tutorId: "system",
@@ -276,7 +330,10 @@ async function processBotEvent(j: Job) {
             e,
             "Здравствуйте! Родителю: отправьте код привязки от преподавателя. Ученику: откройте ссылку подключения в кабинете.",
           );
-      } else if (e.text === "/unlink" || e.callback === "unlink") {
+      } else if (action === "unlink") {
+        d.flows = d.flows.filter(
+          (x) => !bindings.some((b) => b.id === x.bindingId),
+        );
         d.bindings = d.bindings.filter(
           (x) => !bindings.some((b) => b.id === x.id),
         );
@@ -286,27 +343,51 @@ async function processBotEvent(j: Job) {
           e,
           "Привязка удалена. Для подключения понадобится новая ссылка или код.",
         );
+      } else if (action === "balance") {
+        reply(
+          d,
+          j,
+          e,
+          (b ? [b] : bindings)
+            .map((b) => {
+              const s = d.students.find(
+                (x) => x.id === b.studentId && x.tutorId === b.tutorId,
+              )!;
+              const f = finance(d, s);
+              return `${s.name}: ${s.billing === "package" ? `${f.balance} занятий` : `долг ${f.debt} ₽`}`;
+            })
+            .join("\n"),
+          b ? studentButtons : parentButtons,
+        );
+      } else if (action === "start" || action === "help") {
+        reply(
+          d,
+          j,
+          e,
+          b
+            ? "Ваш аккаунт подключен.\n/homework — сдать ДЗ\n/balance — баланс занятий\n/cancel — отменить отправку ДЗ\n/unlink — отключить бота\n/help — помощь\nНапоминания о занятиях и результаты проверки приходят автоматически."
+            : "Уведомления об оплате и отчеты придут автоматически.\n/balance — баланс детей\n/unlink — отключить уведомления\n/help — помощь",
+          b ? studentButtons : parentButtons,
+        );
       } else if (!b) {
-        if (e.text === "/balance") {
-          reply(
-            d,
-            j,
-            e,
-            bindings
-              .map((b) => {
-                const s = d.students.find((x) => x.id === b.studentId)!;
-                const f = finance(d, s);
-                return `${s.name}: ${s.billing === "package" ? `${f.balance} занятий` : `долг ${f.debt} ₽`}`;
-              })
-              .join("\n"),
-          );
-        } else
-          reply(
-            d,
-            j,
-            e,
-            "Уведомления и отчеты придут автоматически. /balance: баланс детей. /unlink: отключить уведомления.",
-          );
+        reply(
+          d,
+          j,
+          e,
+          "Уведомления и отчеты придут автоматически. /balance: баланс детей. /unlink: отключить уведомления.",
+          parentButtons,
+        );
+      } else if (action === "cancel") {
+        d.flows = d.flows.filter((x) => x.bindingId !== b.id);
+        reply(d, j, e, "Отправка отменена.", studentButtons);
+      } else if (command && !["homework", "confirm"].includes(action)) {
+        reply(
+          d,
+          j,
+          e,
+          "Неизвестная команда. /help — список команд.",
+          studentButtons,
+        );
       } else {
         const studentId = b.studentId,
           u = studentAccount(d, b.tutorId, studentId);
@@ -324,10 +405,10 @@ async function processBotEvent(j: Job) {
             ),
         );
         if (
-          e.callback === "homework" ||
-          e.text === "/homework" ||
-          e.text.toLowerCase() === "сдать дз"
+          action === "homework" ||
+          e.text.trim().toLowerCase() === "сдать дз"
         ) {
+          d.flows = d.flows.filter((x) => x.bindingId !== b.id);
           const subjects = [...new Set(active.map((a) => a.subject))];
           reply(
             d,
@@ -373,16 +454,11 @@ async function processBotEvent(j: Job) {
             `${a.title}\nОтправьте JPG, PNG или PDF до 20 МБ. Можно добавить текст. Затем подтвердите отправку.`,
             [{ text: "Отменить", data: "cancel" }],
           );
-        } else if (e.callback === "cancel") {
-          d.flows = d.flows.filter((x) => x.bindingId !== b.id);
-          reply(d, j, e, "Отправка отменена.", [
-            { text: "Сдать ДЗ", data: "homework" },
-          ]);
         } else {
           const flow = d.flows.find(
             (x) => x.bindingId === b.id && x.expiresAt > now(),
           );
-          if (e.callback === "confirm") {
+          if (action === "confirm") {
             assert(flow, "Сначала выберите задание");
             submit(
               d,
@@ -397,7 +473,7 @@ async function processBotEvent(j: Job) {
             reply(d, j, e, "Работа отправлена преподавателю.", [
               { text: "Сдать другое ДЗ", data: "homework" },
             ]);
-          } else if (flow) {
+          } else if (flow && !action) {
             assert(
               flow.fileIds.length + uploaded.length <= 10,
               "Можно прикрепить максимум 10 файлов",
@@ -417,9 +493,13 @@ async function processBotEvent(j: Job) {
               ],
             );
           } else
-            reply(d, j, e, "Откройте список домашних заданий.", [
-              { text: "Сдать ДЗ", data: "homework" },
-            ]);
+            reply(
+              d,
+              j,
+              e,
+              "Выберите действие. /help — список команд.",
+              studentButtons,
+            );
         }
       }
       d.receipts.push({

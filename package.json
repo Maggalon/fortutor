@@ -13,6 +13,7 @@
     "worker": "node --env-file-if-exists=.env.local --import tsx scripts/worker.ts",
     "db:migrate": "node --env-file-if-exists=.env.local --import tsx scripts/migrate.ts",
     "bots:setup": "node --env-file-if-exists=.env.local --import tsx scripts/setup-bots.ts",
+    "bots:check": "node --env-file-if-exists=.env.local --import tsx scripts/check-bots.ts",
     "format": "prettier --write app components lib scripts tests docs"
   },
   "dependencies": {

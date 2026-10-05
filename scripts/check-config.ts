@@ -1,4 +1,5 @@
 import { assert } from "../lib/security";
+import { botLink, telegramUsername } from "../lib/bot-config";
 for (const name of [
   "APP_URL",
   "DATABASE_URL",
@@ -13,6 +14,18 @@ assert(
   "APP_URL должен использовать HTTPS",
 );
 assert(process.env.DEMO_MODE === "false", "DEMO_MODE должен быть false");
+if (process.env.TELEGRAM_BOT_TOKEN) {
+  telegramUsername();
+  assert(
+    process.env.TELEGRAM_WEBHOOK_SECRET &&
+      /^[a-z\d_-]{1,256}$/i.test(process.env.TELEGRAM_WEBHOOK_SECRET),
+    "Заполните корректный TELEGRAM_WEBHOOK_SECRET",
+  );
+}
+if (process.env.MAX_BOT_TOKEN) {
+  botLink("max", "config-check");
+  assert(process.env.MAX_WEBHOOK_SECRET, "Заполните MAX_WEBHOOK_SECRET");
+}
 const shopId = process.env.YOOKASSA_SHOP_ID;
 const secretKey = process.env.YOOKASSA_SECRET_KEY;
 assert(

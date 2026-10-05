@@ -10,6 +10,7 @@ import type {
 import { assert, id, token, hashToken, AppError } from "./security";
 import { demoMode } from "./db";
 import { assertSubscription, subscriptionView } from "./subscription";
+import { botLink } from "./bot-config";
 const text = z.string().trim().min(1).max(200),
   date = z.iso.datetime({ offset: true }),
   ids = z.array(z.string()).max(200);
@@ -561,6 +562,15 @@ export function act(d: Database, u: Account, input: unknown) {
         403,
       );
       const raw = token();
+      const link = botLink(a.channel, raw);
+      assert(
+        a.channel === "telegram"
+          ? process.env.TELEGRAM_BOT_TOKEN
+          : process.env.MAX_BOT_TOKEN,
+        "Бот еще не подключен",
+        503,
+      );
+      const expiresAt = new Date(Date.now() + 15 * 60000).toISOString();
       d.linkTokens = d.linkTokens.filter(
         (x) => x.studentId !== u.studentId || x.channel !== a.channel,
       );
@@ -570,18 +580,9 @@ export function act(d: Database, u: Account, input: unknown) {
         studentId: u.studentId,
         channel: a.channel,
         tokenHash: hashToken(raw),
-        expiresAt: new Date(Date.now() + 15 * 60000).toISOString(),
+        expiresAt,
       });
-      const url =
-        a.channel === "telegram"
-          ? process.env.TELEGRAM_BOT_USERNAME
-            ? `https://t.me/${process.env.TELEGRAM_BOT_USERNAME}?start=${raw}`
-            : ""
-          : process.env.MAX_BOT_URL
-            ? `${process.env.MAX_BOT_URL}?start=${raw}`
-            : "";
-      assert(url, "Бот еще не подключен", 503);
-      return { url };
+      return { ...link, code: raw, expiresAt };
     }
     case "bot.unlink": {
       const b = owned(d.bindings, u, a.id);
@@ -591,6 +592,7 @@ export function act(d: Database, u: Account, input: unknown) {
         "Нет доступа",
         403,
       );
+      d.flows = d.flows.filter((x) => x.bindingId !== b.id);
       d.bindings = d.bindings.filter((x) => x.id !== b.id);
       return {};
     }
