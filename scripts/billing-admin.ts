@@ -2,20 +2,24 @@ import { z } from "zod";
 import { pool, transaction, demoMode } from "../lib/db";
 import { assert, id } from "../lib/security";
 import { ensureSubscription, subscriptionView } from "../lib/subscription";
-import { cancelAutoRenew, reconcilePayment } from "../lib/billing";
+import {
+  cancelAutoRenew,
+  grantFreeAccess,
+  reconcilePayment,
+} from "../lib/billing";
 
 const [command, email, value, ...reason] = process.argv.slice(2);
 assert(!demoMode(), "Команда требует PostgreSQL");
 try {
   if (command === "list") {
     const rows = await pool().query(
-      "SELECT a.data->>'email' email,s.data->>'trialEndsAt' trial_end,s.data->>'paidUntil' paid_until,s.data->>'autoRenew' auto_renew,s.data->>'lastError' error FROM ft_accounts a JOIN ft_subscriptions s ON s.tutor_id=a.id WHERE a.data->>'role'='teacher' ORDER BY a.data->>'email'",
+      "SELECT a.data->>'email' email,s.data->>'trialEndsAt' trial_end,s.data->>'paidUntil' paid_until,s.data->>'freeAccess' free_access,s.data->>'autoRenew' auto_renew,s.data->>'lastError' error FROM ft_accounts a JOIN ft_subscriptions s ON s.tutor_id=a.id WHERE a.data->>'role'='teacher' ORDER BY a.data->>'email'",
     );
     console.table(rows.rows);
   } else {
     assert(
       email,
-      "Usage: billing-admin.ts list | status EMAIL | grant EMAIL ISO_DATE REASON | revoke EMAIL confirm REASON | reconcile EMAIL PROVIDER_PAYMENT_ID | abandon EMAIL ORDER_ID REASON",
+      "Usage: billing-admin.ts list | status EMAIL | free EMAIL confirm REASON | grant EMAIL ISO_DATE REASON | revoke EMAIL confirm REASON | reconcile EMAIL PROVIDER_PAYMENT_ID | abandon EMAIL ORDER_ID REASON",
     );
     const result = await pool().query(
       "SELECT id FROM ft_accounts WHERE lower(data->>'email')=lower($1) AND data->>'role'='teacher'",
@@ -32,10 +36,17 @@ try {
     } else
       await transaction((d) => {
         const s = ensureSubscription(d, tutorId);
-        if (command === "grant") {
+        if (command === "free") {
+          assert(
+            value === "confirm" && reason.length,
+            "Укажите confirm и причину бесплатного доступа",
+          );
+          grantFreeAccess(d, tutorId, reason.join(" "));
+        } else if (command === "grant") {
           const until = z.iso.datetime().parse(value);
           assert(Date.parse(until) > Date.now(), "Дата должна быть в будущем");
           assert(reason.length, "Укажите причину изменения доступа");
+          s.freeAccess = undefined;
           s.paidUntil = until;
           s.failedAttempts = 0;
           s.lastError = undefined;
@@ -52,6 +63,7 @@ try {
             "Укажите confirm и причину отзыва доступа",
           );
           cancelAutoRenew(d, tutorId);
+          s.freeAccess = undefined;
           s.paidUntil = new Date().toISOString();
           s.trialEndsAt = s.paidUntil;
           d.billingEvents.push({

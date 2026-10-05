@@ -12,6 +12,7 @@ import {
   reservePayment,
   applyProviderPayment,
   cancelAutoRenew,
+  grantFreeAccess,
   checkout,
   processPayment,
   billingWebhook,
@@ -124,6 +125,73 @@ test("without YooKassa trial remains available and payment actions never contact
     process.env.YOOKASSA_SECRET_KEY = secret;
     globalThis.fetch = originalFetch;
   }
+});
+
+test("free access never expires, applies to the teacher workspace and blocks payments", () => {
+  const { d, u, s } = setup();
+  s.paidUntil = "2026-01-20T12:00:00.000Z";
+  s.autoRenew = true;
+  s.paymentMethodId = "saved-method";
+  s.nextAttemptAt = stamp.toISOString();
+  s.lastError = "Payment failed";
+  strict.throws(() => grantFreeAccess(d, u.id, " "), /Укажите причину/);
+  grantFreeAccess(d, u.id, "Individual free access");
+  const view = subscriptionView(d, u.id, new Date("9999-01-01T00:00:00Z"));
+  strict.equal(view.status, "free");
+  strict.equal(view.canWrite, true);
+  strict.equal(view.accessUntil, null);
+  strict.equal(view.priceRub, 0);
+  strict.equal(view.autoRenew, false);
+  strict.equal(s.paymentMethodId, undefined);
+  strict.equal(s.nextAttemptAt, undefined);
+  strict.equal(s.lastError, undefined);
+  strict.doesNotThrow(() => assertSubscription(d, u.id));
+  strict.equal(snapshot(d, d.accounts[1]).subscription.status, "free");
+  strict.doesNotThrow(() =>
+    act(d, u, {
+      action: "student.create",
+      name: "Петр",
+      subject: "Математика",
+      billing: "package",
+      rate: 1000,
+      packageSize: 8,
+    }),
+  );
+  for (const kind of ["checkout", "renewal"] as const)
+    strict.throws(
+      () => reservePayment(d, u, true, kind, stamp),
+      /бесплатный бессрочный доступ/,
+    );
+  strict.equal(d.subscriptionPayments.length, 0);
+  strict.equal(
+    d.billingEvents.filter((e) => e.kind === "admin-free-access").length,
+    1,
+  );
+  s.freeAccess = undefined;
+  strict.equal(subscriptionView(d, u.id).status, "expired");
+});
+
+test("free grant cancels unsent orders; late provider events preserve free access", () => {
+  for (const status of ["succeeded", "canceled"]) {
+    const { d, u, s } = setup();
+    s.autoRenew = true;
+    s.paymentMethodId = "saved-method";
+    const sent = reservePayment(d, u, true, "renewal", stamp);
+    sent.firstSentAt = stamp.toISOString();
+    sent.providerId = remote(sent).id;
+    grantFreeAccess(d, u.id, "Individual free access");
+    applyProviderPayment(d, sent.id, remote(sent, status), stamp);
+    strict.equal(subscriptionView(d, u.id).status, "free");
+    strict.equal(s.autoRenew, false);
+    strict.equal(s.paymentMethodId, undefined);
+    strict.equal(s.nextAttemptAt, undefined);
+    strict.equal(s.lastError, undefined);
+  }
+  const { d, u } = setup();
+  const unsent = reservePayment(d, u, true, "checkout", stamp);
+  grantFreeAccess(d, u.id, "Individual free access");
+  strict.equal(unsent.status, "canceled");
+  strict.equal(unsent.firstSentAt, undefined);
 });
 test("successful payment adds a calendar month after trial; duplicate and stale events never extend twice", () => {
   const { d, u, s } = setup();
@@ -340,6 +408,41 @@ test(
           uid,
         ),
         "review",
+      );
+      const sentBeforeFree = await transaction((d) => {
+        d.subscriptionPayments.find((p) => p.id === uncertain)!.status =
+          "canceled";
+        const p = reservePayment(d, u, true, "checkout");
+        p.firstSentAt = new Date().toISOString();
+        grantFreeAccess(d, uid, "Individual free access");
+        return p.id;
+      }, uid);
+      await processPayment(sentBeforeFree, uid);
+      await billingTick();
+      await strict.rejects(
+        checkout(u, { autoRenew: false, consent: false }),
+        /бесплатный бессрочный доступ/,
+      );
+      strict.equal(requests.length, before);
+      strict.equal(
+        await transaction(
+          (d) =>
+            d.subscriptionPayments.find((p) => p.id === sentBeforeFree)!.status,
+          uid,
+        ),
+        "review",
+      );
+      strict.equal(
+        await transaction(
+          (d) =>
+            subscriptionView(d, uid, new Date("9999-01-01T00:00:00Z")).status,
+          uid,
+        ),
+        "free",
+      );
+      strict.equal(
+        await transaction((d) => subscriptionView(d, second).status, second),
+        "trial",
       );
     } finally {
       globalThis.fetch = originalFetch;

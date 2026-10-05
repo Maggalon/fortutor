@@ -101,6 +101,11 @@ export function reservePayment(
 ) {
   assert(u.role === "teacher", "Подпиской управляет преподаватель", 403);
   const s = ensureSubscription(d, u.tutorId, time);
+  assert(
+    !s.freeAccess,
+    "Для этого преподавателя уже включен бесплатный бессрочный доступ",
+    409,
+  );
   const existing = d.subscriptionPayments.find(
     (p) => p.tutorId === u.tutorId && liveStatuses.includes(p.status),
   );
@@ -235,7 +240,7 @@ export function applyProviderPayment(
   } else if (remote.status === "canceled") {
     p.status = "canceled";
     p.error = "Платеж отменен или отклонен. Можно оплатить подписку вручную.";
-    if (p.kind === "renewal") {
+    if (p.kind === "renewal" && !s.freeAccess) {
       s.failedAttempts++;
       s.nextAttemptAt = new Date(time.getTime() + DAY).toISOString();
       s.lastError = p.error;
@@ -272,6 +277,33 @@ export function cancelAutoRenew(d: Database, tutorId: string) {
   });
 }
 
+export function grantFreeAccess(d: Database, tutorId: string, reason: string) {
+  assert(reason.trim(), "Укажите причину изменения доступа");
+  const s = ensureSubscription(d, tutorId);
+  cancelAutoRenew(d, tutorId);
+  s.freeAccess = true;
+  s.failedAttempts = 0;
+  s.lastError = undefined;
+  for (const p of d.subscriptionPayments) {
+    if (
+      p.tutorId === tutorId &&
+      p.status === "creating" &&
+      !p.firstSentAt &&
+      !p.providerId
+    ) {
+      p.status = "canceled";
+      p.error = "Включен бесплатный бессрочный доступ";
+    }
+  }
+  d.billingEvents.push({
+    id: id(),
+    tutorId,
+    kind: "admin-free-access",
+    createdAt: new Date().toISOString(),
+    note: reason.trim(),
+  });
+}
+
 export async function processPayment(orderId: string, tutorId: string) {
   const p = await transaction((d) => {
     const p = d.subscriptionPayments.find((x) => x.id === orderId);
@@ -280,6 +312,13 @@ export async function processPayment(orderId: string, tutorId: string) {
       return null;
     // Renewals reserved before cancellation but not sent yet must never be charged.
     const s = ensureSubscription(d, p.tutorId);
+    if (s.freeAccess && !p.providerId) {
+      p.status = p.firstSentAt ? "review" : "canceled";
+      p.error = p.firstSentAt
+        ? "Включен бесплатный доступ. Проверьте ранее отправленный платеж в ЮKassa."
+        : "Включен бесплатный бессрочный доступ";
+      return null;
+    }
     if (
       p.kind === "renewal" &&
       !p.firstSentAt &&
@@ -391,7 +430,7 @@ export async function billingTick(batchSize = 10) {
   if (!billingConfigured()) return;
   const time = new Date();
   const due = await pool().query(
-    "SELECT tutor_id FROM ft_subscriptions WHERE data->>'autoRenew'='true' AND data->>'paymentMethodId' IS NOT NULL AND (data->>'failedAttempts')::integer<3 AND data->>'paidUntil'<=$1 AND data->>'paidUntil'>$3 AND (data->>'nextAttemptAt' IS NULL OR data->>'nextAttemptAt'<=$1) ORDER BY data->>'nextAttemptAt' NULLS FIRST,data->>'paidUntil' LIMIT $2",
+    "SELECT tutor_id FROM ft_subscriptions WHERE data->>'freeAccess' IS DISTINCT FROM 'true' AND data->>'autoRenew'='true' AND data->>'paymentMethodId' IS NOT NULL AND (data->>'failedAttempts')::integer<3 AND data->>'paidUntil'<=$1 AND data->>'paidUntil'>$3 AND (data->>'nextAttemptAt' IS NULL OR data->>'nextAttemptAt'<=$1) ORDER BY data->>'nextAttemptAt' NULLS FIRST,data->>'paidUntil' LIMIT $2",
     [
       time.toISOString(),
       batchSize,
@@ -402,6 +441,7 @@ export async function billingTick(batchSize = 10) {
     await transaction((d) => {
       const s = ensureSubscription(d, row.tutor_id, time);
       if (
+        s.freeAccess ||
         !s.autoRenew ||
         !s.paymentMethodId ||
         !s.paidUntil ||

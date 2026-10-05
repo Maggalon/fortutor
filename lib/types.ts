@@ -194,6 +194,7 @@ export interface Subscription {
   tutorId: string;
   trialEndsAt: string;
   paidUntil?: string;
+  freeAccess?: boolean;
   autoRenew: boolean;
   paymentMethodId?: string;
   consentAt?: string;
@@ -231,11 +232,11 @@ export interface BillingEvent {
   note?: string;
 }
 export interface SubscriptionView {
-  status: "trial" | "active" | "grace" | "expired";
+  status: "trial" | "active" | "grace" | "expired" | "free";
   canWrite: boolean;
   trialEndsAt: string;
   paidUntil?: string;
-  accessUntil: string;
+  accessUntil: string | null;
   autoRenew: boolean;
   nextAttemptAt?: string;
   lastError?: string;

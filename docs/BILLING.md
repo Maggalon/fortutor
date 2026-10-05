@@ -12,6 +12,7 @@
 - Отключение автопродления сохраняет оплаченный срок. Уже отправленный в банк платеж может завершиться; поздний webhook не включает автопродление снова.
 - После окончания доступа преподаватель и ученики могут войти, просматривать и скачивать свои данные. Учебные изменения/загрузки, сдача ДЗ, новые отчеты и исходящие учебные уведомления блокируются. Профиль и отключение bot-привязок остаются доступны. Платеж/экспорт доступны преподавателю. Данные автоматически не удаляются.
 - Предупреждения о сроке, ошибках и повторной попытке показываются в кабинете. Email/SMS уведомления о подписке в эту версию не входят.
+- Оператор может выдать отдельному преподавателю бесплатный бессрочный доступ (`freeAccess`). Он действует для всего его кабинета, включая учеников, и не зависит от trial или оплаченного срока. Checkout и автопродление отключены; в кабинете показывается бесплатный статус без даты окончания.
 
 ## Первый запуск без ЮKassa
 
@@ -98,12 +99,15 @@ set +a
 ```sh
 docker compose --env-file .env.production -f deploy/compose.production.yml run --rm --no-deps worker node --import tsx scripts/billing-admin.ts list
 docker compose --env-file .env.production -f deploy/compose.production.yml run --rm --no-deps worker node --import tsx scripts/billing-admin.ts status tutor@example.com
+docker compose --env-file .env.production -f deploy/compose.production.yml run --rm --no-deps worker node --import tsx scripts/billing-admin.ts free tutor@example.com confirm "Индивидуальный бесплатный доступ"
 docker compose --env-file .env.production -f deploy/compose.production.yml run --rm --no-deps worker node --import tsx scripts/billing-admin.ts reconcile tutor@example.com PROVIDER_PAYMENT_ID
 docker compose --env-file .env.production -f deploy/compose.production.yml run --rm --no-deps worker node --import tsx scripts/billing-admin.ts grant tutor@example.com 2026-12-01T00:00:00.000Z "Компенсация простоя"
 docker compose --env-file .env.production -f deploy/compose.production.yml run --rm --no-deps worker node --import tsx scripts/billing-admin.ts revoke tutor@example.com confirm "Возврат подписки"
 ```
 
 Grant задает дату доступа явно, не проводит платеж и не меняет согласие на автопродление. Revoke отключает автопродление и заканчивает trial/оплаченный доступ. Для изменений сохраняется событие с причиной в `ft_billingEvents`.
+
+Free включает бессрочный доступ без платежа, отключает автопродление, очищает сохраненный способ оплаты/повторные попытки и отменяет еще не отправленные заказы. Уже отправленный платеж может завершиться: проверка известного provider ID и webhooks продолжают работать, но не включают автопродление. Заказ без provider ID, отправленный до выдачи бесплатного доступа, переводится в review без повторного POST и требует ручной сверки. Grant и revoke снимают бесплатный статус. Выдача доступа сохраняется в журнале как `admin-free-access`; email используется только для поиска существующего аккаунта, исключения в исходном коде нет.
 
 Если после ручной сверки в магазине подтверждено **отсутствие** платежа по неопределенному заказу без provider ID, его можно закрыть командой `billing-admin.ts abandon EMAIL ORDER_ID "Причина и результат сверки"` в том же worker-контейнере. Это допускает новый checkout и требует уверенности, что деньги не списаны; при наличии платежа используйте reconcile. Операция сохраняется в журнале.
 

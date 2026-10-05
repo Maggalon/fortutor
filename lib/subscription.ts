@@ -39,6 +39,18 @@ export function subscriptionView(
   time = new Date(),
 ): SubscriptionView {
   const s = ensureSubscription(d, tutorId, time);
+  if (s.freeAccess) {
+    return {
+      status: "free",
+      canWrite: true,
+      trialEndsAt: s.trialEndsAt,
+      paidUntil: s.paidUntil,
+      accessUntil: null,
+      autoRenew: false,
+      priceRub: 0,
+      configured: false,
+    };
+  }
   const paid = Date.parse(s.paidUntil || s.trialEndsAt);
   const end = Math.max(paid, Date.parse(s.trialEndsAt));
   // A paid subscriber with automatic renewal gets three days to resolve a failure.

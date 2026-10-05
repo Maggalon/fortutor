@@ -337,13 +337,15 @@ export default function Platform({ demo }: { demo: boolean }) {
           {!s.demo && (
             <div className="demo-strip">
               <span>
-                {s.subscription.status === "trial"
-                  ? `Пробный период до ${date(s.subscription.trialEndsAt)} · далее 1190 ₽ в месяц`
-                  : !s.subscription.canWrite
-                    ? "Подписка закончилась · доступен просмотр данных"
-                    : s.subscription.status === "grace"
-                      ? "Необходимо продлить подписку · действует льготный период"
-                      : `Подписка оплачена до ${date(s.subscription.paidUntil!)}`}
+                {s.subscription.status === "free"
+                  ? "Бесплатный бессрочный доступ"
+                  : s.subscription.status === "trial"
+                    ? `Пробный период до ${date(s.subscription.trialEndsAt)} · далее 1190 ₽ в месяц`
+                    : !s.subscription.canWrite
+                      ? "Подписка закончилась · доступен просмотр данных"
+                      : s.subscription.status === "grace"
+                        ? "Необходимо продлить подписку · действует льготный период"
+                        : `Подписка оплачена до ${date(s.subscription.paidUntil!)}`}
               </span>
               {teacher && (
                 <button
