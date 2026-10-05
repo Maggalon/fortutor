@@ -6,6 +6,8 @@ import { demoMode, pool } from "../lib/db";
 import { redisConnection, processOutbox } from "../lib/queue";
 import { assert } from "../lib/security";
 import { billingTick } from "../lib/billing";
+import { telegramUpdateMode } from "../lib/bot-config";
+import { runTelegramPolling } from "../lib/telegram-polling";
 assert(!demoMode(), "Worker требует PostgreSQL и DEMO_MODE=false");
 assert(process.env.REDIS_URL, "REDIS_URL required");
 const connection = redisConnection(process.env.REDIS_URL);
@@ -40,8 +42,32 @@ worker.on("error", (error) =>
   console.error("Worker connection error:", error.message),
 );
 console.log("For Tutor worker online; scheduler every 15 seconds");
+const pollingAbort = new AbortController();
+const polling =
+  process.env.TELEGRAM_BOT_TOKEN && telegramUpdateMode() === "polling"
+    ? runTelegramPolling(pollingAbort.signal, async () => {
+        await queue.add(
+          "tick",
+          {},
+          {
+            jobId: "telegram-outbox",
+            removeOnComplete: true,
+            removeOnFail: true,
+          },
+        );
+      })
+    : Promise.resolve();
+if (process.env.TELEGRAM_BOT_TOKEN)
+  console.log(
+    `Telegram updates: ${telegramUpdateMode()}; transport: ${process.env.TELEGRAM_PROXY_URL?.trim() ? "HTTP proxy" : "direct"}`,
+  );
+let stopping = false;
 for (const signal of ["SIGTERM", "SIGINT"] as const)
   process.on(signal, async () => {
+    if (stopping) return;
+    stopping = true;
+    pollingAbort.abort();
+    await polling;
     await worker.close();
     await queue.close();
     await pool().end();

@@ -80,6 +80,7 @@ test("Bot setup verifies identity, configures commands in both messengers and pr
   process.env.TELEGRAM_BOT_TOKEN = "test-token";
   process.env.TELEGRAM_BOT_USERNAME = " @test_bot ";
   process.env.TELEGRAM_WEBHOOK_SECRET = "test-secret";
+  process.env.TELEGRAM_UPDATE_MODE = "webhook";
   process.env.MAX_BOT_TOKEN = "test-token";
   process.env.MAX_WEBHOOK_SECRET = "test-secret-max";
   process.env.MAX_BOT_URL = "https://max.ru/test_bot?other=1&start=old";

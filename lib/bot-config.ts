@@ -10,6 +10,16 @@ export const botCommands = [
   { command: "unlink", description: "Отключить бота" },
 ];
 
+export function telegramUpdateMode() {
+  const mode = process.env.TELEGRAM_UPDATE_MODE?.trim() || "polling";
+  assert(
+    mode === "polling" || mode === "webhook",
+    "TELEGRAM_UPDATE_MODE должен быть polling или webhook",
+    503,
+  );
+  return mode;
+}
+
 export function telegramUsername(value = process.env.TELEGRAM_BOT_USERNAME) {
   const username = (value || "")
     .trim()

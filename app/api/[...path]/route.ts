@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { ZodError } from "zod";
 import { transaction, demoMode, pool } from "@/lib/db";
-import { act, snapshot, enqueue, now, canReadFile } from "@/lib/domain";
+import { act, snapshot, now, canReadFile } from "@/lib/domain";
 import {
   authenticate,
   currentUser,
@@ -20,6 +20,7 @@ import {
   processPayment,
 } from "@/lib/billing";
 import { assertSubscription, subscriptionView } from "@/lib/subscription";
+import { enqueueBotEvent } from "@/lib/bot-events";
 import { AppError, assert, hashToken, safeEqual } from "@/lib/security";
 import {
   storeFile,
@@ -150,28 +151,7 @@ export async function POST(req: NextRequest, ctx: Context) {
         403,
       );
       const event = await json(req);
-      if (
-        channel === "telegram" &&
-        event.message?.chat?.type !== "private" &&
-        !event.callback_query
-      )
-        return Response.json({ ok: true });
-      if (
-        channel === "telegram" &&
-        event.callback_query?.message?.chat?.type !== "private" &&
-        event.callback_query
-      )
-        return Response.json({ ok: true });
-      if (
-        channel === "max" &&
-        event.message?.recipient?.chat_type &&
-        event.message.recipient.chat_type !== "dialog"
-      )
-        return Response.json({ ok: true });
-      const key = `bot-${channel}-${hashToken(JSON.stringify(event))}`;
-      await transaction((d) =>
-        enqueue(d, { id: key, tutorId: "system", kind: "bot", channel, event }),
-      );
+      await transaction((d) => enqueueBotEvent(d, channel, event), "system");
       return Response.json({ ok: true });
     }
     assert(

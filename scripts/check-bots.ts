@@ -6,8 +6,16 @@ import {
   botWebhookUrl,
   telegramUsername,
   botCommands,
+  telegramUpdateMode,
 } from "../lib/bot-config";
 import { pool } from "../lib/db";
+import { telegramPollCursorId } from "../lib/telegram-polling";
+
+console.log(
+  process.env.TELEGRAM_PROXY_URL?.trim()
+    ? "Telegram: транспорт — HTTP-прокси (TELEGRAM_PROXY_URL задан в этом процессе)"
+    : "Telegram: транспорт — прямое подключение (TELEGRAM_PROXY_URL отсутствует в этом процессе)",
+);
 
 function safe(message: string) {
   for (const name of [
@@ -40,20 +48,44 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
       "Telegram: username соответствует токену",
     );
     const info = await telegram("getWebhookInfo", {});
-    check(
-      info.url === botWebhookUrl("telegram"),
-      "Telegram: webhook соответствует APP_URL",
-    );
-    check(
-      !!process.env.TELEGRAM_WEBHOOK_SECRET,
-      "Telegram: секрет webhook задан",
-    );
-    check(
-      ["message", "callback_query"].every(
-        (type) => !info.allowed_updates || info.allowed_updates.includes(type),
-      ),
-      "Telegram: подписка на сообщения и кнопки",
-    );
+    const mode = telegramUpdateMode();
+    console.log(`Telegram: получение сообщений — ${mode}`);
+    if (mode === "polling") {
+      check(!info.url, "Telegram: webhook отключен для polling");
+      if (process.env.DATABASE_URL) {
+        const cursor = await pool().query(
+          "SELECT data->>'telegramPolledAt' AS polled_at FROM ft_receipts WHERE id=$1",
+          [telegramPollCursorId()],
+        );
+        const polledAt = cursor.rows[0]?.polled_at;
+        check(
+          !!polledAt && Date.parse(polledAt) > Date.now() - 120000,
+          "Telegram: worker успешно опрашивал API за последние две минуты",
+        );
+        if (polledAt)
+          console.log(`Telegram: последний успешный polling=${polledAt}`);
+      } else
+        check(
+          false,
+          "Telegram: DATABASE_URL отсутствует; состояние polling недоступно",
+        );
+    } else {
+      check(
+        info.url === botWebhookUrl("telegram"),
+        "Telegram: webhook соответствует APP_URL",
+      );
+      check(
+        !!process.env.TELEGRAM_WEBHOOK_SECRET,
+        "Telegram: секрет webhook задан",
+      );
+      check(
+        ["message", "callback_query"].every(
+          (type) =>
+            !info.allowed_updates || info.allowed_updates.includes(type),
+        ),
+        "Telegram: подписка на сообщения и кнопки",
+      );
+    }
     console.log(
       `Telegram: pending_update_count=${Number(info.pending_update_count || 0)}`,
     );

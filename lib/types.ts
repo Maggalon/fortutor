@@ -180,6 +180,8 @@ export interface Receipt {
   id: string;
   tutorId: string;
   expiresAt: string;
+  telegramOffset?: number;
+  telegramPolledAt?: string;
 }
 export interface RateLimit {
   id: string;

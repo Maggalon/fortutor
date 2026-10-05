@@ -2,7 +2,11 @@ import type { Channel, Job } from "./types";
 import { assert } from "./security";
 import { telegramFetch } from "./telegram-transport";
 import { maxFetch } from "./max-transport";
-export async function telegram(method: string, body: unknown) {
+export async function telegram(
+  method: string,
+  body: unknown,
+  signal?: AbortSignal,
+) {
   assert(process.env.TELEGRAM_BOT_TOKEN, "Telegram не подключен", 503);
   const response = await telegramFetch(
     `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`,
@@ -10,7 +14,9 @@ export async function telegram(method: string, body: unknown) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(25000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(25000)])
+        : AbortSignal.timeout(25000),
     },
   );
   const result = await response.json();

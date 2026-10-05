@@ -4,7 +4,8 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { ProxyAgent } from "undici";
 import { telegramFetch } from "../lib/telegram-transport";
-import { telegram, maxRequest, readMedia } from "../lib/providers";
+import { telegram, maxRequest, readMedia, sendMessage } from "../lib/providers";
+import { setupTelegram } from "../lib/bot-setup";
 
 test("Telegram uses an authenticated CONNECT tunnel and reports errors without secrets", async () => {
   const previous = process.env.TELEGRAM_PROXY_URL;
@@ -43,6 +44,76 @@ test("Telegram uses an authenticated CONNECT tunnel and reports errors without s
     else process.env.TELEGRAM_PROXY_URL = previous;
     proxy.closeAllConnections();
     await new Promise<void>((resolve) => proxy.close(() => resolve()));
+  }
+});
+
+test("Telegram setup, replies, buttons, attachments and diagnostics all use the configured proxy", async () => {
+  const previous = { ...process.env };
+  const original = globalThis.fetch;
+  process.env.TELEGRAM_PROXY_URL =
+    "http://proxy-user:proxy-password@127.0.0.1:12345";
+  process.env.TELEGRAM_BOT_TOKEN = "test-token";
+  process.env.TELEGRAM_BOT_USERNAME = "test_bot";
+  process.env.TELEGRAM_WEBHOOK_SECRET = "test-secret";
+  process.env.TELEGRAM_UPDATE_MODE = "webhook";
+  process.env.APP_URL = "https://for-tutor.test";
+  const methods: string[] = [];
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    strict.equal(url.hostname, "api.telegram.org");
+    strict.ok(
+      (init as RequestInit & { dispatcher?: unknown }).dispatcher instanceof
+        ProxyAgent,
+      `Proxy missing for ${url.pathname.split("/").at(-1)}`,
+    );
+    const method = url.pathname.split("/").at(-1)!;
+    methods.push(method);
+    if (url.pathname.startsWith("/file/")) return new Response("%PDF-1.7");
+    return Response.json({
+      ok: true,
+      result:
+        method === "getMe"
+          ? { username: "test_bot" }
+          : method === "getWebhookInfo"
+            ? { url: "https://for-tutor.test/api/webhooks/telegram" }
+            : true,
+    });
+  };
+  try {
+    await setupTelegram();
+    await sendMessage(
+      "telegram",
+      "test-chat",
+      "Привязка подтверждена",
+      [{ text: "Сдать ДЗ", data: "homework" }],
+      [
+        { type: "image", token: "test-photo" },
+        { type: "file", token: "test-document" },
+      ],
+    );
+    await telegram("answerCallbackQuery", {
+      callback_query_id: "test-callback",
+    });
+    await telegram("getFile", { file_id: "test-file" });
+    await readMedia("https://api.telegram.org/file/bottest-token/document.pdf");
+    await telegram("getMyCommands", {});
+    strict.deepEqual(methods, [
+      "getMe",
+      "setWebhook",
+      "setMyCommands",
+      "setChatMenuButton",
+      "getWebhookInfo",
+      "sendMessage",
+      "sendPhoto",
+      "sendDocument",
+      "answerCallbackQuery",
+      "getFile",
+      "document.pdf",
+      "getMyCommands",
+    ]);
+  } finally {
+    globalThis.fetch = original;
+    process.env = previous;
   }
 });
 

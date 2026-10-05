@@ -1,5 +1,9 @@
 import { assert } from "../lib/security";
-import { botLink, telegramUsername } from "../lib/bot-config";
+import {
+  botLink,
+  telegramUsername,
+  telegramUpdateMode,
+} from "../lib/bot-config";
 for (const name of [
   "APP_URL",
   "DATABASE_URL",
@@ -16,11 +20,12 @@ assert(
 assert(process.env.DEMO_MODE === "false", "DEMO_MODE должен быть false");
 if (process.env.TELEGRAM_BOT_TOKEN) {
   telegramUsername();
-  assert(
-    process.env.TELEGRAM_WEBHOOK_SECRET &&
-      /^[a-z\d_-]{1,256}$/i.test(process.env.TELEGRAM_WEBHOOK_SECRET),
-    "Заполните корректный TELEGRAM_WEBHOOK_SECRET",
-  );
+  if (telegramUpdateMode() === "webhook")
+    assert(
+      process.env.TELEGRAM_WEBHOOK_SECRET &&
+        /^[a-z\d_-]{1,256}$/i.test(process.env.TELEGRAM_WEBHOOK_SECRET),
+      "Заполните корректный TELEGRAM_WEBHOOK_SECRET",
+    );
 }
 if (process.env.MAX_BOT_TOKEN) {
   botLink("max", "config-check");
