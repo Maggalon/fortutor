@@ -70,7 +70,8 @@ textarea,
 select {
   -webkit-tap-highlight-color: transparent;
 }
-button {
+button,
+a.secondary {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -87,10 +88,13 @@ button {
     color 0.15s,
     transform 0.15s;
 }
-button:hover {
+button:hover,
+a.secondary:hover {
   background: var(--subtle);
+  text-decoration: none;
 }
-button:active {
+button:active,
+a.secondary:active {
   transform: translateY(1px);
 }
 button:disabled {
@@ -1476,6 +1480,12 @@ td button {
 .settings-layout.settings-layout-teacher {
   grid-template-columns: minmax(0, 1fr);
 }
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  min-width: 0;
+}
 .settings-panel {
   padding: 26px;
   overflow: visible;
@@ -1538,7 +1548,6 @@ td button {
 }
 .appearance-panel {
   padding: 24px;
-  margin-top: 24px;
 }
 .appearance-panel > .section-head {
   padding: 0;
@@ -1632,9 +1641,6 @@ td button {
 }
 .failed-job button {
   font-size: 11px;
-}
-.settings-panel + .settings-panel {
-  margin-top: 25px;
 }
 .empty {
   display: flex;

@@ -263,18 +263,20 @@ export default function Platform({ demo }: { demo: boolean }) {
             ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="bot-note">
-            <PaperPlaneTilt size={21} weight="duotone" />
-            <strong>Занятия на связи</strong>
-            <p>
-              Напоминания и отчеты
-              <br />в Telegram и MAX.
-            </p>
-            <button className="text-button" onClick={() => go("settings")}>
-              Настроить ботов
-              <ArrowUpRight size={14} />
-            </button>
-          </div>
+          {!teacher && (
+            <div className="bot-note">
+              <PaperPlaneTilt size={21} weight="duotone" />
+              <strong>Занятия на связи</strong>
+              <p>
+                Напоминания и отчеты
+                <br />в Telegram и MAX.
+              </p>
+              <button className="text-button" onClick={() => go("settings")}>
+                Настроить ботов
+                <ArrowUpRight size={14} />
+              </button>
+            </div>
+          )}
           <button className="user-card" onClick={() => go("settings")}>
             <Avatar name={s.user.name} />
             <div>
@@ -1813,7 +1815,7 @@ function Settings({
             )}
           </form>
         </div>
-        <div>
+        <div className="settings-stack">
           <div className="panel appearance-panel">
             <SectionHead title="Оформление" />
             <div>
